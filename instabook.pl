@@ -51,12 +51,14 @@ foreach my $link (@{$t_res->{links}}) {
     my ($id) = ($link->{href} =~ /(\d+)/);
     next if $synced->{$id};
 
+    my $title_id = 0xffffffff - $id;
+
     $mech->get($link->{href});
     my $content = $mech->content();
 
     my $title = Encode::encode('utf-8', mfn($link->{title}));
 
-    open my $dest, '>', "$dest_dir/$title.html"
+    open my $dest, '>', "$dest_dir/$title_id-$title.html"
         or die "Cannot write file: $!";
     print $dest $content;
     close $dest;
