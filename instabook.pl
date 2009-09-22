@@ -4,7 +4,7 @@ use Web::Scraper;
 use WWW::Mechanize;
 use Getopt::Long;
 use Data::Dump;
-use Storable;
+use Storable qw/retrieve nstore/;
 use Encode;
 use String::MFN;
 
@@ -40,7 +40,7 @@ $mech->get('/u');
 
 my $t_res = $t_scraper->scrape($mech->content);
 my $synced = {};
-eval { retrieve("$dest_dir/synced.sto") };
+eval { $synced = retrieve("$dest_dir/synced.sto") };
 
 $SIG{__DIE__} = $SIG{INT} = sub {
     nstore($synced, "$dest_dir/synced.sto");
