@@ -4,9 +4,10 @@ use Web::Scraper;
 use WWW::Mechanize;
 use Getopt::Long;
 use Data::Dump;
-use Storable qw/retrieve nstore/;
+use JSON;
 use Encode;
 use String::MFN;
+use autodie;
 
 my ($username, $password, $dest_dir) = (undef, undef, '.');
 GetOptions( "username=s" => \$username,
@@ -40,15 +41,29 @@ $mech->get('/u');
 
 my $t_res = $t_scraper->scrape($mech->content);
 my $synced = {};
-eval { $synced = retrieve("$dest_dir/synced.sto") };
+open my $file, '<', "$dest_dir/synced.json";
+my $arrayref = from_json(join "\n", <$file>);
+close $file;
+$synced->{$_} = 1 for @$arrayref;
 
 $SIG{__DIE__} = $SIG{INT} = sub {
-    nstore($synced, "$dest_dir/synced.sto");
+    open my $file, '>', "$dest_dir/synced.json";
+    print $file to_json([sort { $a <=> $b } keys %$synced], {pretty => 1});
     exit;
 };
 
+#use Data::Dumper;
+#print Dumper($t_res);
+#print Dumper($synced);
+
 foreach my $link (@{$t_res->{links}}) {
-    my ($id) = ($link->{href} =~ /(\d+)/);
+    my ($id) = ($link->{href} =~ /article=(\d+)$/);     # old
+    unless ($id) {
+        ($id) = ($link->{href} =~ m{/go/(\d+)/text});     # new
+    }
+
+    warn "$link->{href}\n" unless defined $id;
+
     next if $synced->{$id};
 
     my $title_id = 0xffffffff - $id;
@@ -56,14 +71,20 @@ foreach my $link (@{$t_res->{links}}) {
     $mech->get($link->{href});
     my $content = $mech->content();
 
+    $content =~ s{<script.*?</script>}{}gs;
+
     my $title = Encode::encode('utf-8', mfn($link->{title}));
 
     open my $dest, '>', "$dest_dir/$title_id-$title.html"
         or die "Cannot write file: $!";
-    print $dest $content;
+    print $dest Encode::encode('utf-8', $content);
     close $dest;
 
     $synced->{$id}++;
+
+    say "Pausing for 10 secs";
+    sleep 10;
 }
 
-nstore($synced, "$dest_dir/synced.sto");
+open $file, '>', "$dest_dir/synced.json";
+print $file to_json([sort { $a <=> $b } keys %$synced], {pretty => 1})
